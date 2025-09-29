@@ -7,6 +7,7 @@
     
     <!-- Librerías Externas -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -506,15 +507,57 @@
                 renderPreviews(questionIndex); // Volver a renderizar las vistas previas
             }
         }
+        
+        // Nueva función para corregir la orientación de la imagen
+        function getCorrectedOrientedImage(file) {
+            return new Promise((resolve) => {
+                const img = document.createElement('img');
+                const url = URL.createObjectURL(file);
+                
+                img.onload = () => {
+                    EXIF.getData(img, function() {
+                        const orientation = EXIF.getTag(this, "Orientation");
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
 
-        function readFileAsArrayBuffer(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = reject;
-                reader.readAsArrayBuffer(file);
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (orientation >= 5 && orientation <= 8) {
+                            canvas.width = height;
+                            canvas.height = width;
+                        } else {
+                            canvas.width = width;
+                            canvas.height = height;
+                        }
+
+                        switch (orientation) {
+                            case 2: ctx.transform(-1, 0, 0, 1, width, 0); break;
+                            case 3: ctx.transform(-1, 0, 0, -1, width, height); break;
+                            case 4: ctx.transform(1, 0, 0, -1, 0, height); break;
+                            case 5: ctx.transform(0, 1, 1, 0, 0, 0); break;
+                            case 6: ctx.transform(0, 1, -1, 0, height, 0); break;
+                            case 7: ctx.transform(0, -1, -1, 0, height, width); break;
+                            case 8: ctx.transform(0, -1, 1, 0, 0, width); break;
+                            default: ctx.transform(1, 0, 0, 1, 0, 0);
+                        }
+
+                        ctx.drawImage(img, 0, 0);
+                        URL.revokeObjectURL(url);
+                        
+                        resolve(canvas.toDataURL('image/jpeg'));
+                    });
+                };
+                img.onerror = () => {
+                    // Si falla la carga de EXIF, simplemente devuelve el archivo original
+                    const reader = new FileReader();
+                    reader.onload = e => resolve(e.target.result);
+                    reader.readAsDataURL(file);
+                };
+                img.src = url;
             });
         }
+
 
         async function exportToExcel() {
             const exportBtn = document.getElementById('exportBtn');
@@ -545,7 +588,6 @@
                 });
                 worksheet.getColumn('A').width = 10; worksheet.getColumn('B').width = 30; worksheet.getColumn('C').width = 5; 
                 worksheet.getColumn('D').width = 60; worksheet.getColumn('E').width = 15; worksheet.getColumn('F').width = 50; 
-                // Definir ancho para cada columna de evidencia
                 worksheet.getColumn('G').width = 25; worksheet.getColumn('H').width = 25; worksheet.getColumn('I').width = 25;
                 worksheet.getColumn('J').width = 25; worksheet.getColumn('K').width = 25;
                 
@@ -569,15 +611,17 @@
                     if (answer === 'No') {
                         const filesToExport = questionFiles[i] || [];
                         if (filesToExport.length > 0) {
-                            row.height = 80; // Aumentar altura de la fila para las fotos
+                            row.height = 80;
 
                             for(let fileIndex = 0; fileIndex < filesToExport.length; fileIndex++) {
                                 const file = filesToExport[fileIndex];
-                                const imageBuffer = await readFileAsArrayBuffer(file);
-                                const imageExtension = file.type.split('/')[1] || 'png';
-                                const imageId = workbook.addImage({ buffer: imageBuffer, extension: imageExtension });
+                                const correctedDataUrl = await getCorrectedOrientedImage(file);
                                 
-                                // Colocar cada imagen en su propia columna, comenzando desde G (índice 6)
+                                const imageId = workbook.addImage({
+                                    base64: correctedDataUrl,
+                                    extension: 'jpeg',
+                                });
+                                
                                 worksheet.addImage(imageId, {
                                     tl: { col: 6 + fileIndex, row: row.number - 0.98 },
                                     ext: { width: 150, height: 100 }
@@ -642,4 +686,3 @@
 
 </body>
 </html>
-
