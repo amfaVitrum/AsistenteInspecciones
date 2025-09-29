@@ -530,14 +530,14 @@
                 const area = document.getElementById('area').value || 'No especificada';
                 const fecha = document.getElementById('fecha').value || 'No especificada';
                 worksheet.addRow(['Datos Generales de la Inspección']).font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
-                worksheet.mergeCells('A1:G1');
+                worksheet.mergeCells('A1:K1'); // Expandir merge hasta la columna K
                 worksheet.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
                 worksheet.getCell('A1').fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF3498DB'} };
                 worksheet.addRow(['Auditor:', auditor]); worksheet.addRow(['Auditado:', auditado]); worksheet.addRow(['Área:', area]); worksheet.addRow(['Fecha:', fecha]);
                 ['A2', 'A3', 'A4', 'A5'].forEach(cellRef => { worksheet.getCell(cellRef).font = { bold: true }; });
                 worksheet.addRow([]);
 
-                const headerRow = worksheet.addRow(['Fase', 'Criterio', 'N°', 'Pregunta Clave', 'Respuesta', 'Observación', 'Evidencia (Foto)']);
+                const headerRow = worksheet.addRow(['Fase', 'Criterio', 'N°', 'Pregunta Clave', 'Respuesta', 'Observación', 'Evidencia 1', 'Evidencia 2', 'Evidencia 3', 'Evidencia 4', 'Evidencia 5']);
                 headerRow.eachCell(cell => {
                     cell.font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
                     cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF3498DB'} };
@@ -545,15 +545,18 @@
                 });
                 worksheet.getColumn('A').width = 10; worksheet.getColumn('B').width = 30; worksheet.getColumn('C').width = 5; 
                 worksheet.getColumn('D').width = 60; worksheet.getColumn('E').width = 15; worksheet.getColumn('F').width = 50; 
-                worksheet.getColumn('G').width = 70; // Columna de evidencia más ancha
+                // Definir ancho para cada columna de evidencia
+                worksheet.getColumn('G').width = 25; worksheet.getColumn('H').width = 25; worksheet.getColumn('I').width = 25;
+                worksheet.getColumn('J').width = 25; worksheet.getColumn('K').width = 25;
                 
                 for (let i = 0; i < flatChecklist.length; i++) {
                     const answer = document.querySelector(`input[name="option-${i}"]:checked`).value;
                     const observation = (answer === 'No') ? document.getElementById(`observation-${i}`).value : '';
                     
-                    const row = worksheet.addRow([
+                    const rowData = [
                         flatChecklist[i].phase, flatChecklist[i].criteria, i + 1, flatChecklist[i].question, answer, observation
-                    ]);
+                    ];
+                    const row = worksheet.addRow(rowData);
                     
                     row.alignment = { vertical: 'middle', wrapText: true };
                     
@@ -567,19 +570,18 @@
                         const filesToExport = questionFiles[i] || [];
                         if (filesToExport.length > 0) {
                             row.height = 80; // Aumentar altura de la fila para las fotos
-                            let imageColOffset = 0.02;
 
-                            for(const file of filesToExport) {
+                            for(let fileIndex = 0; fileIndex < filesToExport.length; fileIndex++) {
+                                const file = filesToExport[fileIndex];
                                 const imageBuffer = await readFileAsArrayBuffer(file);
                                 const imageExtension = file.type.split('/')[1] || 'png';
                                 const imageId = workbook.addImage({ buffer: imageBuffer, extension: imageExtension });
                                 
+                                // Colocar cada imagen en su propia columna, comenzando desde G (índice 6)
                                 worksheet.addImage(imageId, {
-                                    tl: { col: 6 + imageColOffset, row: row.number - 0.98 },
-                                    ext: { width: 90, height: 90 }
+                                    tl: { col: 6 + fileIndex, row: row.number - 0.98 },
+                                    ext: { width: 150, height: 100 }
                                 });
-                                imageColOffset += 0.20; // Espaciar las imágenes
-                                if (imageColOffset > 0.98) break; // Evitar que se salgan de la celda
                             }
                         }
                     }
